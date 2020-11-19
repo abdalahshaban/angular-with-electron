@@ -1,7 +1,7 @@
 import { app, BrowserWindow, screen, ipcMain, webContents, ipcRenderer } from 'electron';
 import * as path from 'path';
 import * as url from 'url';
-import { PKCS11 } from "pkcs11js";
+import * as pkcs11js from "pkcs11js";
 
 
 let win: BrowserWindow = null;
@@ -114,43 +114,47 @@ try {
 
 
 
-    ipcMain.on('getDataToken', (event, arg) => {
+    ipcMain.on('getDataToken', async (event, arg) => {
 
         try {
 
             console.log('getDataToken1');
-            pkcs11 = new PKCS11();
-            console.log('pkcs11', pkcs11)
+            pkcs11 = new pkcs11js.PKCS11();
+            // console.log('pkcs11', pkcs11)
             let dllPath = path.join(__dirname, `../lib/eps2003csp11.dll`);
             pkcs11.load(dllPath);
-            console.log('loaded');
+            // console.log('loaded');
             pkcs11.C_Initialize();
             let token_info;
             // Getting info about PKCS11 Module
             var module_info = pkcs11.C_GetInfo();
-            console.log(module_info, 'module_info');
+            // console.log(module_info, 'module_info');
 
             // Getting list of slots
             var slots = pkcs11.C_GetSlotList(true);
             // console.log(slots, 'slots');
             var slot = slots[0];
-            console.log(slot, 'slot')
+            // console.log(slot, 'slot')
 
             // // Getting info about slot
             var slot_info = pkcs11.C_GetSlotInfo(slot);
-            console.log(slot_info, 'slot_info');
+            // console.log(slot_info, 'slot_info');
             // Getting info about token
             token_info = pkcs11.C_GetTokenInfo(slot);
-            console.log(token_info, 'token_info');
+            // console.log(token_info, 'token_info');
 
             // Getting info about Mechanism
             var mechs = pkcs11.C_GetMechanismList(slot);
-            console.log(mechs, 'mechs');
+            // console.log(mechs, 'mechs');
             var mech_info = pkcs11.C_GetMechanismInfo(slot, mechs[0]);
-            console.log(mech_info, 'mech_info');
+            // console.log(mech_info, 'mech_info');
 
-            var session = pkcs11.C_OpenSession(slot, pkcs11.CKF_RW_SESSION | pkcs11.CKF_SERIAL_SESSION);
+            var session = pkcs11.C_OpenSession(slot, pkcs11js.CKF_RW_SESSION | pkcs11js.CKF_SERIAL_SESSION);
             console.log(session, 'session');
+
+            // let seJson = Buffer.from(session).toJSON();
+            // console.log(seJson.data, 'seJson')
+
 
             // Getting info about Session
             var info = pkcs11.C_GetSessionInfo(session);
@@ -158,6 +162,88 @@ try {
             /**
             * Your app code here
             */
+            // let driveKey = pkcs11.C_DeriveKey()
+            // console.log(driveKey, 'driveKey');
+            const publicKeyTemplate = [
+                { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_PUBLIC_KEY },
+                { type: pkcs11js.CKA_TOKEN, value: false },
+                { type: pkcs11js.CKA_LABEL, value: 'My RSA Public Key' },
+                { type: pkcs11js.CKA_PUBLIC_EXPONENT, value: Buffer.from([1, 0, 1]) },
+                { type: pkcs11js.CKA_MODULUS_BITS, value: 2048 },
+                { type: pkcs11js.CKA_VERIFY, value: true }
+            ];
+
+            const privateKeyTemplate = [
+                { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_PRIVATE_KEY },
+                { type: pkcs11js.CKA_TOKEN, value: false },
+                { type: pkcs11js.CKA_LABEL, value: 'My RSA Private Key' },
+                { type: pkcs11js.CKA_SIGN, value: true },
+            ];
+
+            const keys = pkcs11.C_GenerateKeyPair(session, { mechanism: pkcs11js.CKM_RSA_PKCS_KEY_PAIR_GEN }, publicKeyTemplate, privateKeyTemplate);
+
+            console.log('Keys generated: ' + JSON.stringify(keys));
+
+            var template = [
+                { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_SECRET_KEY },
+                { type: pkcs11js.CKA_TOKEN, value: false },
+                { type: pkcs11js.CKA_LABEL, value: "My AES Key" },
+                { type: pkcs11js.CKA_VALUE_LEN, value: 256 / 8 },
+                { type: pkcs11js.CKA_ENCRYPT, value: true },
+                { type: pkcs11js.CKA_DECRYPT, value: true },
+            ];
+            var key = pkcs11.C_GenerateKey(session, { mechanism: pkcs11js.CKM_AES_KEY_GEN }, template);
+            console.log('Key generated: ' + JSON.stringify(key));
+            // var publicKeyTemplate = [
+            //     { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_PUBLIC_KEY },
+            //     { type: pkcs11js.CKA_TOKEN, value: false },
+            //     { type: pkcs11js.CKA_LABEL, value: "My RSA Public Key" },
+            //     { type: pkcs11js.CKA_PUBLIC_EXPONENT, value: new Buffer([1, 0, 1]) },
+            //     { type: pkcs11js.CKA_MODULUS_BITS, value: 2048 },
+            //     { type: pkcs11js.CKA_VERIFY, value: true }
+            // ];
+            // var privateKeyTemplate = [
+            //     { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_PRIVATE_KEY },
+            //     { type: pkcs11js.CKA_TOKEN, value: false },
+            //     { type: pkcs11js.CKA_LABEL, value: "My RSA Private Key" },
+            //     { type: pkcs11js.CKA_SIGN, value: true },
+            // ];
+            // let newKeyPair = pkcs11.C_GenerateKeyPair(session, { mechanism: pkcs11js.CKM_RSA_PKCS_KEY_PAIR_GEN }, publicKeyTemplate, privateKeyTemplate);
+            // console.log(newKeyPair, 'newKeyPair');
+            // var nObject = pkcs11.C_CreateObject(session, [
+            //     { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_DATA },
+            //     { type: pkcs11js.CKA_TOKEN, value: false },
+            //     { type: pkcs11js.CKA_PRIVATE, value: false },
+            //     { type: pkcs11js.CKA_LABEL, value: "My custom data" },
+            // ]);
+            // let C_GetAttributeValue = pkcs11.C_GetAttributeValue(session, nObject, [
+            //     { type: pkcs11js.CKA_LABEL },
+            //     { type: pkcs11js.CKA_TOKEN }
+            // ]);
+            // console.log(C_GetAttributeValue, 'C_GetAttributeValue');
+
+            // const _pkcs11FindObjects = (pkcs11, pkcs11Session, pkcs11Template) => {
+            //     pkcs11.C_FindObjectsInit(pkcs11Session, pkcs11Template);
+            //     var objs = [];
+            //     var obj = pkcs11.C_FindObjects(pkcs11Session);
+            //     while (obj) {
+            //         objs.push(obj);
+            //         obj = pkcs11.C_FindObjects(pkcs11Session);
+            //     }
+            //     pkcs11.C_FindObjectsFinal(pkcs11Session);
+            //     return objs;
+            // }
+
+            // let PrivKeysHandle = _pkcs11FindObjects(pkcs11, session, [
+            //     { type: pkcs11js.CKA_CLASS, value: pkcs11js.CKO_PRIVATE_KEY },
+            //     { type: pkcs11js.CKA_TOKEN, value: true },
+            //     { type: pkcs11js.CKA_LABEL, value: "mylabel" },
+            // ])
+
+            // console.log(PrivKeysHandle, 'PrivKeysHandle')
+            // Get public_key_id...
+            // let publicKeyId = pkcs11.C_GetAttributeValue(session, PrivKeysHandle[0], [{ type: 0x129 }])
+            // console.log('publicKey', token_info)
 
             pkcs11.C_Logout(session);
             pkcs11.C_CloseSession(session);

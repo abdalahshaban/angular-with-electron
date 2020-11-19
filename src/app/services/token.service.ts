@@ -20,6 +20,7 @@ export class TokenService {
     alert('insert hard token');
     console.log(this._electronService.isWindows, 'isWindows');
     this._electronService.ipcRenderer.send('getDataToken')
+    this._electronService.ipcRenderer.send("getPublicKey")
   }
 
   getTokenData() {
